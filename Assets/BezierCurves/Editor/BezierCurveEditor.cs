@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEditor;
 
 namespace BezierCurve
@@ -204,7 +204,7 @@ namespace BezierCurve
 
 			m_NeedDrawPropertys = new SerializedProperty[]
 			{
-			serializedObject.FindProperty("CloseCurve"),
+			serializedObject.FindProperty("m_CloseCurve"),
 			serializedObject.FindProperty("Resolution"),
 			serializedObject.FindProperty("EnableGizmos"),
 			serializedObject.FindProperty("CurveGizmosColor"),
@@ -218,7 +218,7 @@ namespace BezierCurve
 
 		protected void OnSceneGUI()
 		{
-			for (int iBezierPoint = 0; iBezierPoint < m_BezierCurve.Points.Length; iBezierPoint++)
+			for (int iBezierPoint = 0; iBezierPoint < m_BezierCurve.Points.Count; iBezierPoint++)
 			{
 				OnSceneGUI_BezierPoint(m_BezierCurve.Points[iBezierPoint]);
 			}
@@ -230,7 +230,7 @@ namespace BezierCurve
 			if (GUILayout.Button("X", GUILayout.Width(20)))
 			{
 				Undo.RegisterCompleteObjectUndo(bezierPoint.gameObject, "Remove Point");
-				m_PointsProperty.MoveArrayElement(index, m_BezierCurve.Points.Length - 1);
+				m_PointsProperty.MoveArrayElement(index, m_BezierCurve.Points.Count - 1);
 				m_PointsProperty.arraySize--;
 				DestroyImmediate(bezierPoint.gameObject);
 				return;

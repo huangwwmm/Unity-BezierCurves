@@ -1,4 +1,4 @@
-using UnityEngine;
+Ôªøusing UnityEngine;
 using System;
 using System.Collections.Generic;
 
@@ -12,19 +12,20 @@ namespace BezierCurve
 		/// Used to determine if the curve should be drawn as "closed" in the editor
 		/// Used to determine if the curve's length should include the curve between the first and the last points in "points" array
 		/// </summary>
-		[Tooltip("±’∫œ«˙œﬂ")]
-		public bool CloseCurve;
+		[Tooltip("Èó≠ÂêàÊõ≤Á∫ø")
+			, SerializeField]
+		private bool m_CloseCurve;
 		/// <summary>
 		/// The value of mid-points calculated for each pair of bezier points
 		/// The larger the value, the smoother the curve
 		/// </summary>
-		[Tooltip(" ˝÷µ‘Ω¥Ûæ´∂»‘Ω∏ﬂ£¨«˙œﬂ‘Ω‘≤ª¨")]
+		[Tooltip("Êï∞ÂÄºË∂äÂ§ßÁ≤æÂ∫¶Ë∂äÈ´òÔºåÊõ≤Á∫øË∂äÂúÜÊªë")]
 		public float Resolution = 30;
 		/// <summary> 
 		/// 	- Array of point objects that make up this curve
 		///		- Populated through editor
 		/// </summary>
-		public BezierPoint[] Points = new BezierPoint[0];
+		public List<BezierPoint> Points = new List<BezierPoint>();
 
 #if UNITY_EDITOR
 		[Header("Debug")]
@@ -45,6 +46,20 @@ namespace BezierCurve
 		/// </summary>
 		private float m_LastLength;
 
+		public bool IsCloseCurve()
+		{
+			return m_CloseCurve;
+		}
+
+		public void SetCloseCurve(bool close)
+		{
+			if (m_CloseCurve != close)
+			{
+				m_IsDirty = true;
+				m_CloseCurve = close;
+			}
+		}
+
 		/// <summary>
 		/// <see cref="m_LastLength"/>
 		/// </summary>
@@ -55,14 +70,14 @@ namespace BezierCurve
 				m_IsDirty = false;
 
 				m_LastLength = 0;
-				for (int iPoint = 0; iPoint < Points.Length - 1; iPoint++)
+				for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
 				{
 					m_LastLength += ApproximateLength(Points[iPoint], Points[iPoint + 1]);
 				}
 
-				if (CloseCurve)
-				{ 
-					m_LastLength += ApproximateLength(Points[Points.Length - 1], Points[0]);
+				if (m_CloseCurve)
+				{
+					m_LastLength += ApproximateLength(Points[Points.Count - 1], Points[0]);
 				}
 			}
 
@@ -76,7 +91,7 @@ namespace BezierCurve
 		public Vector3 EvaluateInBezier(float t)
 		{
 			if (t <= 0) return Points[0].GetWorldPosition();
-			else if (t >= 1) return Points[Points.Length - 1].GetWorldPosition();
+			else if (t >= 1) return Points[Points.Count - 1].GetWorldPosition();
 
 			float totalPercent = 0;
 			float curvePercent = 0;
@@ -84,7 +99,7 @@ namespace BezierCurve
 			BezierPoint p1 = null;
 			BezierPoint p2 = null;
 
-			for (int i = 0; i < Points.Length - 1; i++)
+			for (int i = 0; i < Points.Count - 1; i++)
 			{
 				curvePercent = ApproximateLength(Points[i], Points[i + 1]) / GetLength();
 				if (totalPercent + curvePercent > t)
@@ -97,15 +112,32 @@ namespace BezierCurve
 				else totalPercent += curvePercent;
 			}
 
-			if (CloseCurve && p1 == null)
+			if (m_CloseCurve && p1 == null)
 			{
-				p1 = Points[Points.Length - 1];
+				p1 = Points[Points.Count - 1];
 				p2 = Points[0];
 			}
 
 			t -= totalPercent;
 
 			return EvaluateInPointToPoint(p1, p2, t / curvePercent);
+		}
+
+		public BezierPoint AddPoint(BezierPoint.HandleStyle handleStyle
+			, Vector3 pointLocalPosition
+			, Vector3 handle1LocalPosition
+			, Vector3 handle2LocalPosition)
+		{
+			m_IsDirty = true;
+			BezierPoint newPoint = new GameObject("Point " + Points.Count).AddComponent<BezierPoint>();
+			newPoint.transform.parent = transform;
+
+			newPoint.MyHandleStyle = handleStyle;
+			newPoint.SetLocalPosition(pointLocalPosition);
+			newPoint.SetHandle1LocalPosition(handle1LocalPosition);
+			newPoint.SetHandle2LocalPosition(handle2LocalPosition);
+			Points.Add(newPoint);
+			return newPoint;
 		}
 
 		/// <summary>
@@ -181,7 +213,7 @@ namespace BezierCurve
 
 		protected void Update()
 		{
-			for (int iPoint = 0; iPoint < Points.Length; iPoint++)
+			for (int iPoint = 0; iPoint < Points.Count; iPoint++)
 			{
 				m_IsDirty |= Points[iPoint].DoUpdate();
 			}
@@ -190,17 +222,18 @@ namespace BezierCurve
 #if UNITY_EDITOR
 		protected void OnDrawGizmos()
 		{
-			if (Points.Length > 1)
+			if (EnableGizmos
+				&& Points.Count > 1)
 			{
 				Gizmos.color = CurveGizmosColor;
-				for (int iPoint = 0; iPoint < Points.Length - 1; iPoint++)
+				for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
 				{
 					OnDrawGizmos_PointToPoint(Points[iPoint], Points[iPoint + 1]);
 				}
 
-				if (CloseCurve)
+				if (m_CloseCurve)
 				{
-					OnDrawGizmos_PointToPoint(Points[Points.Length - 1], Points[0]);
+					OnDrawGizmos_PointToPoint(Points[Points.Count - 1], Points[0]);
 				}
 			}
 		}
