@@ -179,10 +179,14 @@ namespace BezierCurve
 					}
 #endif
 					p2 = Points[p2Index];
-					break;
+			return EvaluateInPointToPoint_LocalSpace(p1, p2, percentage);
 				}
 			}
-			return EvaluateInPointToPoint_LocalSpace(p1, p2, percentage);
+
+			// if t approximate 1.0
+			return Points[IsCloseCurve()
+				? 0
+				: Points.Count - 1].GetPosition_CurveLocalSpace();
 		}
 
 		/// <summary>
