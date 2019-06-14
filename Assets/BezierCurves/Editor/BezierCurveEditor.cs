@@ -67,6 +67,7 @@ namespace BezierCurve
 
 			if (GUI.changed)
 			{
+				bezierPoint.SetDirty();
 				EditorUtility.SetDirty(bezierPoint);
 			}
 		}
@@ -192,6 +193,7 @@ namespace BezierCurve
 
 			if (GUI.changed)
 			{
+				m_BezierCurve.SetDirty();
 				serializedObject.ApplyModifiedProperties();
 				EditorUtility.SetDirty(target);
 			}

@@ -52,6 +52,11 @@ namespace BezierCurve
 		/// </summary>
 		private float[] m_FragmentApproximateLengths;
 
+		public void SetDirty()
+		{
+			m_IsDirty = true;
+		}
+
 		public bool IsCloseCurve()
 		{
 			return m_CloseCurve;
@@ -147,7 +152,9 @@ namespace BezierCurve
 			}
 			else if (t >= 1)
 			{
-				return Points[Points.Count - 1].GetPosition_CurveLocalSpace();
+				return Points[IsCloseCurve()
+					? 0
+					: Points.Count - 1].GetPosition_CurveLocalSpace();
 			}
 
 			BezierPoint p1 = null;
@@ -167,6 +174,7 @@ namespace BezierCurve
 #if UNITY_EDITOR
 					if (p2Index == 0 && !IsCloseCurve())
 					{
+						m_IsDirty = true;
 						throw new Exception();
 					}
 #endif

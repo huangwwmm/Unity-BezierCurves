@@ -41,6 +41,11 @@ namespace BezierCurve
 		private Vector3 m_LastPosition;
 
 		#region Point
+		public void SetDirty()
+		{
+			m_IsDirty = true;
+		}
+
 		public BezierCurve GetOwner()
 		{
 			return m_Owner;
