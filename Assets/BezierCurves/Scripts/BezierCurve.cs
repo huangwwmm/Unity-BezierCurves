@@ -45,7 +45,12 @@ namespace BezierCurve
 		/// The approximate length of the curve
 		/// Recalculates if the curve is <see cref="m_IsDirty"/>
 		/// </summary>
-		private float m_LastLength;
+		private float m_Length;
+		/// <summary>
+		/// <see cref="ApproximateLength_LocalSpace(BezierPoint, BezierPoint)"/>
+		/// Recalculates if the curve is <see cref="m_IsDirty"/>
+		/// </summary>
+		private float[] m_FragmentApproximateLengths;
 
 		public bool IsCloseCurve()
 		{
@@ -76,27 +81,12 @@ namespace BezierCurve
 		}
 
 		/// <summary>
-		/// <see cref="m_LastLength"/>
+		/// <see cref="m_Length"/>
 		/// </summary>
 		public float GetLength()
 		{
-			if (m_IsDirty)
-			{
-				m_IsDirty = false;
-
-				m_LastLength = 0;
-				for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
-				{
-					m_LastLength += ApproximateLength_LocalSpace(Points[iPoint], Points[iPoint + 1]);
-				}
-
-				if (m_CloseCurve)
-				{
-					m_LastLength += ApproximateLength_LocalSpace(Points[Points.Count - 1], Points[0]);
-				}
-			}
-
-			return m_LastLength;
+			TryEvaluateCurve();
+			return m_Length;
 		}
 
 		public BezierPoint AddPoint_LocalSpace(BezierPoint.HandleStyle handleStyle
@@ -150,6 +140,7 @@ namespace BezierCurve
 		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
 		public Vector3 EvaluateInBezier_LocalSpace(float t)
 		{
+			TryEvaluateCurve();
 			if (t <= 0)
 			{
 				return Points[0].GetPosition_CurveLocalSpace();
@@ -159,34 +150,31 @@ namespace BezierCurve
 				return Points[Points.Count - 1].GetPosition_CurveLocalSpace();
 			}
 
-			float totalPercent = 0;
-			float curvePercent = 0;
-
 			BezierPoint p1 = null;
 			BezierPoint p2 = null;
-
-			for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
+			float percentage = 0;
+			float targetLength = t * GetLength();
+			for (int iPoint = 0; iPoint < Points.Count; iPoint++)
 			{
-				curvePercent = ApproximateLength_LocalSpace(Points[iPoint], Points[iPoint + 1]) / GetLength();
-				if (totalPercent + curvePercent > t)
+				targetLength -= m_FragmentApproximateLengths[iPoint];
+				if (targetLength <= 0)
 				{
+					percentage = targetLength / m_FragmentApproximateLengths[iPoint] + 1.0f;
 					p1 = Points[iPoint];
-					p2 = Points[iPoint + 1];
+					int p2Index = iPoint + 1 >= Points.Count
+						? 0
+						: iPoint + 1;
+#if UNITY_EDITOR
+					if (p2Index == 0 && !IsCloseCurve())
+					{
+						throw new Exception();
+					}
+#endif
+					p2 = Points[p2Index];
 					break;
 				}
-
-				else totalPercent += curvePercent;
 			}
-
-			if (m_CloseCurve && p1 == null)
-			{
-				p1 = Points[Points.Count - 1];
-				p2 = Points[0];
-			}
-
-			t -= totalPercent;
-
-			return EvaluateInPointToPoint_LocalSpace(p1, p2, t / curvePercent);
+			return EvaluateInPointToPoint_LocalSpace(p1, p2, percentage);
 		}
 
 		/// <summary>
@@ -200,10 +188,39 @@ namespace BezierCurve
 			Vector3 point = Vector3.zero;
 			for (int iEvaluate = 0; iEvaluate < evaluateCount; iEvaluate++)
 			{
-				 point += EvaluateInBezier_LocalSpace(0.99f);
+				point += EvaluateInBezier_LocalSpace(0.99f);
 			}
 			stopwatch.Stop();
 			return stopwatch.ElapsedMilliseconds;
+		}
+
+		/// <summary>
+		/// if <see cref="m_IsDirty"/>
+		/// </summary>
+		public void TryEvaluateCurve()
+		{
+			if (m_IsDirty)
+			{
+				ForceEvaluateCurve();
+			}
+		}
+
+		public void ForceEvaluateCurve()
+		{
+			m_IsDirty = false;
+
+			m_Length = 0;
+			m_FragmentApproximateLengths = new float[Points.Count];
+			for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
+			{
+				m_FragmentApproximateLengths[iPoint] = ApproximateLength_LocalSpace(Points[iPoint], Points[iPoint + 1]);
+				m_Length += m_FragmentApproximateLengths[iPoint];
+			}
+
+			m_FragmentApproximateLengths[Points.Count - 1] += IsCloseCurve()
+				? ApproximateLength_LocalSpace(Points[Points.Count - 1], Points[0])
+				: 0;
+			m_Length += m_FragmentApproximateLengths[Points.Count - 1];
 		}
 
 		protected void OnEnable()
@@ -234,7 +251,7 @@ namespace BezierCurve
 					OnDrawGizmos_PointToPoint(Points[iPoint], Points[iPoint + 1]);
 				}
 
-				if (m_CloseCurve)
+				if (IsCloseCurve())
 				{
 					OnDrawGizmos_PointToPoint(Points[Points.Count - 1], Points[0]);
 				}
@@ -249,15 +266,15 @@ namespace BezierCurve
 		private void OnDrawGizmos_PointToPoint(BezierPoint pointFrom, BezierPoint pointTo)
 		{
 			Gizmos.color = CurveGizmosColor;
-				Vector3 lastPoint = pointFrom.GetPosition_LocalSpace();
-				Vector3 currentPoint = Vector3.zero;
-				for (int iSegment = 1; iSegment < m_Resolution + 1; iSegment++)
-				{
-					currentPoint = EvaluateInPointToPoint_LocalSpace(pointFrom, pointTo, iSegment / m_Resolution);
-					Gizmos.DrawLine(transform.TransformPoint(lastPoint)
-						, transform.TransformPoint(currentPoint));
-					lastPoint = currentPoint;
-				}
+			Vector3 lastPoint = pointFrom.GetPosition_LocalSpace();
+			Vector3 currentPoint = Vector3.zero;
+			for (int iSegment = 1; iSegment < m_Resolution + 1; iSegment++)
+			{
+				currentPoint = EvaluateInPointToPoint_LocalSpace(pointFrom, pointTo, iSegment / m_Resolution);
+				Gizmos.DrawLine(transform.TransformPoint(lastPoint)
+					, transform.TransformPoint(currentPoint));
+				lastPoint = currentPoint;
+			}
 		}
 #endif
 
@@ -302,8 +319,6 @@ namespace BezierCurve
 		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
 		private Vector3 EvaluateInCubicCurve(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, float t)
 		{
-			t = Mathf.Clamp01(t);
-
 			Vector3 part1 = Mathf.Pow(1 - t, 3) * p1;
 			Vector3 part2 = 3 * Mathf.Pow(1 - t, 2) * t * p2;
 			Vector3 part3 = 3 * (1 - t) * Mathf.Pow(t, 2) * p3;
@@ -318,15 +333,12 @@ namespace BezierCurve
 		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
 		private Vector3 EvaluateInQuadraticCurve(Vector3 p1, Vector3 p2, Vector3 p3, float t)
 		{
-			t = Mathf.Clamp01(t);
-
 			Vector3 part1 = Mathf.Pow(1 - t, 2) * p1;
 			Vector3 part2 = 2 * (1 - t) * t * p2;
 			Vector3 part3 = Mathf.Pow(t, 2) * p3;
 
 			return part1 + part2 + part3;
 		}
-
 
 #if UNITY_EDITOR
 		[ContextMenu("Test Performance")]

@@ -21,7 +21,7 @@ namespace BezierCurve
 				GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
 				go.name = iSphere.ToString();
 				go.transform.SetParent(transform, false);
-
+				go.transform.localScale = Vector3.one * 32;
 				go.transform.localPosition = position;
 				ts[iSphere] = go.transform;
 			}
