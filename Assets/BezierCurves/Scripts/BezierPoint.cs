@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 
 namespace BezierCurve
@@ -15,12 +15,20 @@ namespace BezierCurve
 		/// Local position of the first handle
 		/// </summary>
 		[SerializeField]
-		private Vector3 m_Handle1LocalPosition;
+		private Vector3 m_Handle1Position_LocalSpace;
 		/// <summary>
 		/// Local position of the second handle
 		/// </summary>
 		[SerializeField]
-		private Vector3 m_Handle2LocalPosition;
+		private Vector3 m_Handle2Position_LocalSpace;
+
+		[SerializeField]
+		private Vector3 m_Handle1Position_CurveLocalSpace;
+		[SerializeField]
+		private Vector3 m_Handle2Position_CurveLocalSpace;
+
+		private BezierCurve m_Owner;
+		private Vector3 m_Position_CurveLocalSpace;
 
 		/// <summary>
 		/// <see cref="BezierCurve.m_IsDirty"/>
@@ -32,12 +40,23 @@ namespace BezierCurve
 		/// </summary>
 		private Vector3 m_LastPosition;
 
-		public Vector3 GetWorldPosition()
+		#region Point
+		public BezierCurve GetOwner()
+		{
+			return m_Owner;
+		}
+
+		public void SetOwner(BezierCurve owner)
+		{
+			m_Owner = owner;
+		}
+
+		public Vector3 GetPosition_WorldSpace()
 		{
 			return transform.position;
 		}
 
-		public void SetWorldPosition(Vector3 position)
+		public void SetPosition_WorldSpace(Vector3 position)
 		{
 			if (transform.position == position)
 			{
@@ -48,12 +67,12 @@ namespace BezierCurve
 			transform.position = position;
 		}
 
-		public Vector3 GetLocalPosition()
+		public Vector3 GetPosition_LocalSpace()
 		{
 			return transform.localPosition;
 		}
 
-		public void SetLocalPosition(Vector3 position)
+		public void SetPosition_LocalSpace(Vector3 position)
 		{
 			if (transform.localPosition == position)
 			{
@@ -64,91 +83,105 @@ namespace BezierCurve
 			transform.localPosition = position;
 		}
 
-		public Vector3 GetHandle1LocalPosition()
+		public Vector3 GetPosition_CurveLocalSpace()
 		{
-			return m_Handle1LocalPosition;
+			return m_Position_CurveLocalSpace;
+		}
+		#endregion End Point
+
+		#region Handle1
+		public Vector3 GetHandle1Position_LocalSpace()
+		{
+			return m_Handle1Position_LocalSpace;
 		}
 
-		public void SetHandle1LocalPosition(Vector3 position)
+		public void SetHandle1Position_LocalSpace(Vector3 position)
 		{
-			if (m_Handle1LocalPosition == position)
+			if (m_Handle1Position_LocalSpace == position)
 			{
 				return;
 			}
 
 			m_IsDirty = true;
-			m_Handle1LocalPosition = position;
+			m_Handle1Position_LocalSpace = position;
 
-			if (MyHandleStyle == HandleStyle.None)
+			if (MyHandleStyle == HandleStyle.Connected)
 			{
-				MyHandleStyle = HandleStyle.Broken;
+				m_Handle2Position_LocalSpace = -m_Handle1Position_LocalSpace;
 			}
-			else if (MyHandleStyle == HandleStyle.Connected)
-			{
-				m_Handle2LocalPosition = -m_Handle1LocalPosition;
-			}
+
+			m_Handle1Position_CurveLocalSpace = m_Owner.transform.InverseTransformPoint(transform.TransformPoint(m_Handle1Position_LocalSpace));
 		}
 
-		public Vector3 GetHandle1WorldPosition()
+		public Vector3 GetHandle1Position_WorldSpace()
 		{
-			return transform.TransformPoint(GetHandle1LocalPosition());
+			return transform.TransformPoint(GetHandle1Position_LocalSpace());
 		}
 
-		public void SetHandle1WorldPosition(Vector3 position)
+		public void SetHandle1Position_WorldSpace(Vector3 position)
 		{
-			SetHandle1LocalPosition(transform.InverseTransformPoint(position));
+			SetHandle1Position_LocalSpace(transform.InverseTransformPoint(position));
 		}
 
-		public Vector3 GetHandle2LocalPosition()
+		public Vector3 GetHandle1Position_CurveLocalSpace()
 		{
-			return m_Handle2LocalPosition;
+			return m_Handle1Position_CurveLocalSpace;
+		}
+		#endregion End Handle1
+
+		#region Handle2
+		public Vector3 GetHandle2Position_LocalSpace()
+		{
+			return m_Handle2Position_LocalSpace;
 		}
 
-		public void SetHandle2LocalPosition(Vector3 position)
+		public void SetHandle2Position_LocalSpace(Vector3 position)
 		{
-			if (m_Handle2LocalPosition == position)
+			if (m_Handle2Position_LocalSpace == position)
 			{
 				return;
 			}
 
 			m_IsDirty = true;
-			m_Handle2LocalPosition = position;
+			m_Handle2Position_LocalSpace = position;
 
-			if (MyHandleStyle == HandleStyle.None)
+			if (MyHandleStyle == HandleStyle.Connected)
 			{
-				MyHandleStyle = HandleStyle.Broken;
+				m_Handle1Position_LocalSpace = -m_Handle2Position_LocalSpace;
 			}
-			else if (MyHandleStyle == HandleStyle.Connected)
-			{
-				m_Handle1LocalPosition = -m_Handle2LocalPosition;
-			}
+
+			m_Handle2Position_CurveLocalSpace = m_Owner.transform.InverseTransformPoint(transform.TransformPoint(m_Handle2Position_LocalSpace));
 		}
 
-		public Vector3 GetHandle2WorldPosition()
+		public Vector3 GetHandle2Position_WorldSpace()
 		{
-			return transform.TransformPoint(GetHandle2LocalPosition());
+			return transform.TransformPoint(GetHandle2Position_LocalSpace());
 		}
 
-		public void GetHandle2WorldPosition(Vector3 position)
+		public void SetHandle2Position_WorldSpace(Vector3 position)
 		{
-			SetHandle2LocalPosition(transform.InverseTransformPoint(position));
+			SetHandle2Position_LocalSpace(transform.InverseTransformPoint(position));
 		}
 
-		public void SetHandle2WorldPosition(Vector3 position)
+		public Vector3 GetHandle2Position_CurveLocalSpace()
 		{
-			SetHandle2LocalPosition(transform.InverseTransformPoint(position));
+			return m_Handle2Position_CurveLocalSpace;
 		}
+		#endregion End Handle2
 
 		public bool DoUpdate()
 		{
-			if (GetWorldPosition() != m_LastPosition)
+			if (GetPosition_WorldSpace() != m_LastPosition)
 			{
 				m_IsDirty = true;
-				m_LastPosition = GetWorldPosition();
+				m_LastPosition = GetPosition_WorldSpace();
 			}
 
 			if (m_IsDirty)
 			{
+				m_Position_CurveLocalSpace = m_Owner.transform.InverseTransformPoint(transform.position);
+				m_Handle1Position_CurveLocalSpace = m_Owner.transform.InverseTransformPoint(transform.TransformPoint(m_Handle1Position_LocalSpace));
+				m_Handle2Position_CurveLocalSpace = m_Owner.transform.InverseTransformPoint(transform.TransformPoint(m_Handle2Position_LocalSpace));
 				m_IsDirty = false;
 				return true;
 			}

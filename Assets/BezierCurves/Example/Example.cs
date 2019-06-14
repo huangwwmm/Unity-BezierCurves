@@ -9,17 +9,21 @@ namespace BezierCurve
 		public BezierCurve BezierCurve;
 		public int Count;
 
+		Transform[] ts;
+
 		private void Awake()
 		{
 			float t = 1.0f / Count;
+			ts = new Transform[Count];
 			for (int iSphere = 0; iSphere < Count; iSphere++)
 			{
-				Vector3 position = BezierCurve.EvaluateInBezier(t * iSphere);
-				GameObject gameObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				gameObject.name = iSphere.ToString();
-				gameObject.transform.SetParent(transform, false);
+				Vector3 position = BezierCurve.EvaluateInBezier_LocalSpace(t * iSphere);
+				GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				go.name = iSphere.ToString();
+				go.transform.SetParent(transform, false);
 
-				gameObject.transform.position = position;
+				go.transform.localPosition = position;
+				ts[iSphere] = go.transform;
 			}
 		}
 
@@ -28,7 +32,7 @@ namespace BezierCurve
 			float t = 1.0f / Count;
 			for (int iSphere = 0; iSphere < Count; iSphere++)
 			{
-				transform.GetChild(iSphere).position = BezierCurve.EvaluateInBezier(t * iSphere);
+				ts[iSphere].localPosition = BezierCurve.EvaluateInBezier_LocalSpace(t * iSphere);
 			}
 		}
 	}

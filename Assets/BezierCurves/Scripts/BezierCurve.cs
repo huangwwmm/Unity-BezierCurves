@@ -19,8 +19,9 @@ namespace BezierCurve
 		/// The value of mid-points calculated for each pair of bezier points
 		/// The larger the value, the smoother the curve
 		/// </summary>
-		[Tooltip("数值越大精度越高，曲线越圆滑")]
-		public float Resolution = 30;
+		[Tooltip("数值越大精度越高，曲线越圆滑")
+			, SerializeField]
+		private float m_Resolution = 30;
 		/// <summary> 
 		/// 	- Array of point objects that make up this curve
 		///		- Populated through editor
@@ -60,6 +61,20 @@ namespace BezierCurve
 			}
 		}
 
+		public float GetResolution()
+		{
+			return m_Resolution;
+		}
+
+		public void SetResolution(float resolution)
+		{
+			if (m_Resolution != resolution)
+			{
+				m_IsDirty = true;
+				m_Resolution = resolution;
+			}
+		}
+
 		/// <summary>
 		/// <see cref="m_LastLength"/>
 		/// </summary>
@@ -72,26 +87,77 @@ namespace BezierCurve
 				m_LastLength = 0;
 				for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
 				{
-					m_LastLength += ApproximateLength(Points[iPoint], Points[iPoint + 1]);
+					m_LastLength += ApproximateLength_LocalSpace(Points[iPoint], Points[iPoint + 1]);
 				}
 
 				if (m_CloseCurve)
 				{
-					m_LastLength += ApproximateLength(Points[Points.Count - 1], Points[0]);
+					m_LastLength += ApproximateLength_LocalSpace(Points[Points.Count - 1], Points[0]);
 				}
 			}
 
 			return m_LastLength;
 		}
 
+		public BezierPoint AddPoint_LocalSpace(BezierPoint.HandleStyle handleStyle
+			, Vector3 pointLocalPosition
+			, Vector3 handle1LocalPosition
+			, Vector3 handle2LocalPosition)
+		{
+			m_IsDirty = true;
+			BezierPoint newPoint = new GameObject("Point " + Points.Count).AddComponent<BezierPoint>();
+			newPoint.SetOwner(this);
+			newPoint.transform.parent = transform;
+
+			newPoint.MyHandleStyle = handleStyle;
+			newPoint.SetPosition_LocalSpace(pointLocalPosition);
+			newPoint.SetHandle1Position_LocalSpace(handle1LocalPosition);
+			newPoint.SetHandle2Position_LocalSpace(handle2LocalPosition);
+			Points.Add(newPoint);
+			return newPoint;
+		}
+
+		public BezierPoint AddPoint_WorldSpace(BezierPoint.HandleStyle handleStyle
+			, Vector3 pointWorldPosition
+			, Vector3 handle1WorldPosition
+			, Vector3 handle2WorldPosition)
+		{
+			m_IsDirty = true;
+			BezierPoint newPoint = new GameObject("Point " + Points.Count).AddComponent<BezierPoint>();
+			newPoint.SetOwner(this);
+			newPoint.transform.parent = transform;
+
+			newPoint.MyHandleStyle = handleStyle;
+			newPoint.SetPosition_WorldSpace(pointWorldPosition);
+			newPoint.SetHandle1Position_WorldSpace(handle1WorldPosition);
+			newPoint.SetHandle2Position_WorldSpace(handle2WorldPosition);
+			Points.Add(newPoint);
+			return newPoint;
+		}
+
 		/// <summary>
 		/// Gets the point at 't' percent along this curve
 		/// </summary>
 		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
-		public Vector3 EvaluateInBezier(float t)
+		public Vector3 EvaluateInBezier_WorldSpace(float t)
 		{
-			if (t <= 0) return Points[0].GetWorldPosition();
-			else if (t >= 1) return Points[Points.Count - 1].GetWorldPosition();
+			return transform.TransformPoint(EvaluateInBezier_LocalSpace(t));
+		}
+
+		/// <summary>
+		/// Gets the point at 't' percent along this curve
+		/// </summary>
+		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
+		public Vector3 EvaluateInBezier_LocalSpace(float t)
+		{
+			if (t <= 0)
+			{
+				return Points[0].GetPosition_CurveLocalSpace();
+			}
+			else if (t >= 1)
+			{
+				return Points[Points.Count - 1].GetPosition_CurveLocalSpace();
+			}
 
 			float totalPercent = 0;
 			float curvePercent = 0;
@@ -99,13 +165,13 @@ namespace BezierCurve
 			BezierPoint p1 = null;
 			BezierPoint p2 = null;
 
-			for (int i = 0; i < Points.Count - 1; i++)
+			for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
 			{
-				curvePercent = ApproximateLength(Points[i], Points[i + 1]) / GetLength();
+				curvePercent = ApproximateLength_LocalSpace(Points[iPoint], Points[iPoint + 1]) / GetLength();
 				if (totalPercent + curvePercent > t)
 				{
-					p1 = Points[i];
-					p2 = Points[i + 1];
+					p1 = Points[iPoint];
+					p2 = Points[iPoint + 1];
 					break;
 				}
 
@@ -120,95 +186,33 @@ namespace BezierCurve
 
 			t -= totalPercent;
 
-			return EvaluateInPointToPoint(p1, p2, t / curvePercent);
-		}
-
-		public BezierPoint AddPoint(BezierPoint.HandleStyle handleStyle
-			, Vector3 pointLocalPosition
-			, Vector3 handle1LocalPosition
-			, Vector3 handle2LocalPosition)
-		{
-			m_IsDirty = true;
-			BezierPoint newPoint = new GameObject("Point " + Points.Count).AddComponent<BezierPoint>();
-			newPoint.transform.parent = transform;
-
-			newPoint.MyHandleStyle = handleStyle;
-			newPoint.SetLocalPosition(pointLocalPosition);
-			newPoint.SetHandle1LocalPosition(handle1LocalPosition);
-			newPoint.SetHandle2LocalPosition(handle2LocalPosition);
-			Points.Add(newPoint);
-			return newPoint;
+			return EvaluateInPointToPoint_LocalSpace(p1, p2, t / curvePercent);
 		}
 
 		/// <summary>
-		/// Gets the point 't' percent along a curve
-		/// Automatically calculates for the number of relevant points
+		/// test evaluate
 		/// </summary>
-		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
-		public Vector3 EvaluateInPointToPoint(BezierPoint p1, BezierPoint p2, float t)
+		/// <returns>elapsed milliseconds</returns>
+		public long TestPerformance(int evaluateCount)
 		{
-			return p1.GetHandle2LocalPosition() != Vector3.zero
-				? p2.GetHandle1LocalPosition() != Vector3.zero
-					? EvaluateInCubicCurve(p1.GetWorldPosition(), p1.GetHandle2WorldPosition(), p2.GetHandle1WorldPosition(), p2.GetWorldPosition(), t)
-					: EvaluateInQuadraticCurve(p1.GetWorldPosition(), p1.GetHandle2WorldPosition(), p2.GetWorldPosition(), t)
-				: p2.GetHandle1LocalPosition() != Vector3.zero
-					 ? EvaluateInQuadraticCurve(p1.GetWorldPosition(), p2.GetHandle1WorldPosition(), p2.GetWorldPosition(), t)
-					 : Vector3.Lerp(p1.GetWorldPosition(), p2.GetWorldPosition(), t);
-		}
-
-		/// <summary>
-		/// Gets the point 't' percent along a third-order curve
-		/// </summary>
-		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
-		public Vector3 EvaluateInCubicCurve(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, float t)
-		{
-			t = Mathf.Clamp01(t);
-
-			Vector3 part1 = Mathf.Pow(1 - t, 3) * p1;
-			Vector3 part2 = 3 * Mathf.Pow(1 - t, 2) * t * p2;
-			Vector3 part3 = 3 * (1 - t) * Mathf.Pow(t, 2) * p3;
-			Vector3 part4 = Mathf.Pow(t, 3) * p4;
-
-			return part1 + part2 + part3 + part4;
-		}
-
-		/// <summary>
-		/// Gets the point 't' percent along a second-order curve
-		/// </summary>
-		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
-		public Vector3 EvaluateInQuadraticCurve(Vector3 p1, Vector3 p2, Vector3 p3, float t)
-		{
-			t = Mathf.Clamp01(t);
-
-			Vector3 part1 = Mathf.Pow(1 - t, 2) * p1;
-			Vector3 part2 = 2 * (1 - t) * t * p2;
-			Vector3 part3 = Mathf.Pow(t, 2) * p3;
-
-			return part1 + part2 + part3;
-		}
-
-		/// <summary>
-		/// Approximate length of p1 to p2
-		/// </summary>
-		public float ApproximateLength(BezierPoint p1, BezierPoint p2)
-		{
-			float total = 0;
-			Vector3 lastPosition = p1.GetWorldPosition();
-			Vector3 currentPosition;
-
-			for (int iPoint = 0; iPoint < Resolution + 1; iPoint++)
+			System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+			stopwatch.Start();
+			Vector3 point = Vector3.zero;
+			for (int iEvaluate = 0; iEvaluate < evaluateCount; iEvaluate++)
 			{
-				currentPosition = EvaluateInPointToPoint(p1, p2, iPoint / Resolution);
-				total += (currentPosition - lastPosition).magnitude;
-				lastPosition = currentPosition;
+				 point += EvaluateInBezier_LocalSpace(0.99f);
 			}
-
-			return total;
+			stopwatch.Stop();
+			return stopwatch.ElapsedMilliseconds;
 		}
 
-		protected void Awake()
+		protected void OnEnable()
 		{
 			m_IsDirty = true;
+			for (int iPoint = 0; iPoint < Points.Count; iPoint++)
+			{
+				Points[iPoint].SetOwner(this);
+			}
 		}
 
 		protected void Update()
@@ -225,7 +229,6 @@ namespace BezierCurve
 			if (EnableGizmos
 				&& Points.Count > 1)
 			{
-				Gizmos.color = CurveGizmosColor;
 				for (int iPoint = 0; iPoint < Points.Count - 1; iPoint++)
 				{
 					OnDrawGizmos_PointToPoint(Points[iPoint], Points[iPoint + 1]);
@@ -245,14 +248,94 @@ namespace BezierCurve
 		/// </summary>
 		private void OnDrawGizmos_PointToPoint(BezierPoint pointFrom, BezierPoint pointTo)
 		{
-			Vector3 lastPoint = pointFrom.GetWorldPosition();
-			Vector3 currentPoint = Vector3.zero;
-			for (int iSegment = 1; iSegment < Resolution + 1; iSegment++)
+			Gizmos.color = CurveGizmosColor;
+				Vector3 lastPoint = pointFrom.GetPosition_LocalSpace();
+				Vector3 currentPoint = Vector3.zero;
+				for (int iSegment = 1; iSegment < m_Resolution + 1; iSegment++)
+				{
+					currentPoint = EvaluateInPointToPoint_LocalSpace(pointFrom, pointTo, iSegment / m_Resolution);
+					Gizmos.DrawLine(transform.TransformPoint(lastPoint)
+						, transform.TransformPoint(currentPoint));
+					lastPoint = currentPoint;
+				}
+		}
+#endif
+
+		/// <summary>
+		/// Gets the point 't' percent along a curve
+		/// Automatically calculates for the number of relevant points
+		/// </summary>
+		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
+		private Vector3 EvaluateInPointToPoint_LocalSpace(BezierPoint p1, BezierPoint p2, float t)
+		{
+			return p1.GetHandle2Position_LocalSpace() != Vector3.zero
+				? p2.GetHandle1Position_LocalSpace() != Vector3.zero
+					? EvaluateInCubicCurve(p1.GetPosition_CurveLocalSpace(), p1.GetHandle2Position_CurveLocalSpace(), p2.GetHandle1Position_CurveLocalSpace(), p2.GetPosition_CurveLocalSpace(), t)
+					: EvaluateInQuadraticCurve(p1.GetPosition_CurveLocalSpace(), p1.GetHandle2Position_CurveLocalSpace(), p2.GetPosition_CurveLocalSpace(), t)
+				: p2.GetHandle1Position_LocalSpace() != Vector3.zero
+					 ? EvaluateInQuadraticCurve(p1.GetPosition_CurveLocalSpace(), p2.GetHandle1Position_CurveLocalSpace(), p2.GetPosition_CurveLocalSpace(), t)
+					 : Vector3.Lerp(p1.GetPosition_CurveLocalSpace(), p2.GetPosition_CurveLocalSpace(), t);
+		}
+
+		/// <summary>
+		/// Approximate length of p1 to p2
+		/// </summary>
+		private float ApproximateLength_LocalSpace(BezierPoint p1, BezierPoint p2)
+		{
+			float total = 0;
+			Vector3 lastPosition = p1.GetPosition_CurveLocalSpace();
+			Vector3 currentPosition;
+
+			for (int iPoint = 0; iPoint < m_Resolution + 1; iPoint++)
 			{
-				currentPoint = EvaluateInPointToPoint(pointFrom, pointTo, iSegment / Resolution);
-				Gizmos.DrawLine(lastPoint, currentPoint);
-				lastPoint = currentPoint;
+				currentPosition = EvaluateInPointToPoint_LocalSpace(p1, p2, iPoint / m_Resolution);
+				total += (currentPosition - lastPosition).magnitude;
+				lastPosition = currentPosition;
 			}
+
+			return total;
+		}
+
+		/// <summary>
+		/// Gets the point 't' percent along a third-order curve
+		/// </summary>
+		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
+		private Vector3 EvaluateInCubicCurve(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, float t)
+		{
+			t = Mathf.Clamp01(t);
+
+			Vector3 part1 = Mathf.Pow(1 - t, 3) * p1;
+			Vector3 part2 = 3 * Mathf.Pow(1 - t, 2) * t * p2;
+			Vector3 part3 = 3 * (1 - t) * Mathf.Pow(t, 2) * p3;
+			Vector3 part4 = Mathf.Pow(t, 3) * p4;
+
+			return part1 + part2 + part3 + part4;
+		}
+
+		/// <summary>
+		/// Gets the point 't' percent along a second-order curve
+		/// </summary>
+		/// <param name="t">Value between 0 and 1 representing the percent along the curve (0 = 0%, 1 = 100%)</param>
+		private Vector3 EvaluateInQuadraticCurve(Vector3 p1, Vector3 p2, Vector3 p3, float t)
+		{
+			t = Mathf.Clamp01(t);
+
+			Vector3 part1 = Mathf.Pow(1 - t, 2) * p1;
+			Vector3 part2 = 2 * (1 - t) * t * p2;
+			Vector3 part3 = Mathf.Pow(t, 2) * p3;
+
+			return part1 + part2 + part3;
+		}
+
+
+#if UNITY_EDITOR
+		[ContextMenu("Test Performance")]
+		internal void _TestPerformance()
+		{
+			const int EVALUATE_COUNT = 10000;
+			UnityEditor.EditorUtility.DisplayDialog("BezierCurve"
+				, string.Format("Evaluate {0} times for {1} milliseconds", EVALUATE_COUNT, TestPerformance(EVALUATE_COUNT))
+				, "Ok");
 		}
 #endif
 	}
